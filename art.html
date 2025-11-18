@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Generative Art Playground</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, sans-serif;
+      background: #020617;
+      color: #e5e7eb;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    header {
+      padding: 0.75rem 1.25rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1.5rem;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #1e293b;
+    }
+    .title-block {
+      min-width: 200px;
+    }
+    h1 {
+      font-size: 1.2rem;
+      margin: 0;
+    }
+    .subtitle {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      margin-top: 0.2rem;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1rem;
+      font-size: 0.8rem;
+      align-items: center;
+    }
+    .control {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      color: #cbd5f5;
+    }
+    .control input[type="range"] {
+      width: 120px;
+    }
+    canvas {
+      flex: 1;
+      display: block;
+      width: 100%;
+      background: radial-gradient(circle at top, #0f172a 0, #020617 60%, #000 100%);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title-block">
+      <h1>Generative Art Playground</h1>
+      <div class="subtitle">Move your mouse, adjust sliders, and watch the system evolve.</div>
+    </div>
+    <div class="controls">
+      <div class="control">
+        <label for="density">Particles</label>
+        <input id="density" type="range" min="50" max="600" value="200" />
+      </div>
+      <div class="control">
+        <label for="speed">Speed</label>
+        <input id="speed" type="range" min="1" max="8" value="3" />
+      </div>
+      <div class="control">
+        <label for="trail">Trail</label>
+        <input id="trail" type="range" min="0" max="100" value="75" />
+      </div>
+    </div>
+  </header>
+
+  <canvas id="canvas"></canvas>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    const densityInput = document.getElementById('density');
+    const speedInput = document.getElementById('speed');
+    const trailInput = document.getElementById('trail');
+
+    let width, height;
+    let particles = [];
+    let mouse = { x: null, y: null };
+    let time = 0;
+
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight - document.querySelector('header').offsetHeight;
+      canvas.width = width;
+      canvas.height = height;
+      if (!mouse.x || !mouse.y) {
+        mouse.x = width / 2;
+        mouse.y = height / 2;
+      }
+    }
+
+    window.addEventListener('resize', resize);
+    resize();
+
+    window.addEventListener('mousemove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = e.clientX - rect.left;
+      mouse.y = e.clientY - rect.top;
+    });
+
+    window.addEventListener('mouseleave', () => {
+      mouse.x = width / 2;
+      mouse.y = height / 2;
+    });
+
+    function createParticles() {
+      const count = parseInt(densityInput.value, 10);
+      particles = [];
+      for (let i = 0; i < count; i++) {
+        particles.push({
+          angle: Math.random() * Math.PI * 2,
+          radius: 20 + Math.random() * 250,
+          offset: Math.random() * Math.PI * 2,
+        });
+      }
+    }
+
+    createParticles();
+    densityInput.addEventListener('input', createParticles);
+
+    function lerp(a, b, t) {
+      return a + (b - a) * t;
+    }
+
+    function animate() {
+      const speedFactor = parseFloat(speedInput.value) / 3;
+      const trailStrength = parseInt(trailInput.value, 10) / 100;
+
+      // Fade previous frame for a trail effect
+      ctx.fillStyle = `rgba(2, 6, 23, ${1 - trailStrength})`;
+      ctx.fillRect(0, 0, width, height);
+
+      time += 0.01 * speedFactor;
+
+      const baseHue = 200 + Math.sin(time * 0.5) * 40;
+
+      const targetX = mouse.x ?? width / 2;
+      const targetY = mouse.y ?? height / 2;
+
+      particles.forEach((p, i) => {
+        const t = time + p.offset;
+        p.angle += 0.0025 * speedFactor;
+
+        const swirl = Math.sin(t * 2 + i * 0.01) * 40;
+        const radius = p.radius + swirl;
+
+        const cx = lerp(width / 2, targetX, 0.25);
+        const cy = lerp(height / 2, targetY, 0.25);
+
+        const x = cx + Math.cos(p.angle) * radius;
+        const y = cy + Math.sin(p.angle) * radius;
+
+        const alpha = 0.5 + 0.5 * Math.sin(t + i * 0.002);
+        const hue = baseHue + Math.sin(i * 0.03 + time) * 40;
+        const size = 1.2 + (Math.sin(t * 3 + i) + 1) * 1.5;
+
+        ctx.beginPath();
+        ctx.fillStyle = `hsla(${hue}, 85%, 65%, ${alpha})`;
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      requestAnimationFrame(animate);
+    }
+
+    animate();
+  </script>
+</body>
+</html>

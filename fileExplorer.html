@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>GitHub Profile Explorer</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      margin: 0;
+      padding: 1.5rem;
+      background: #0f172a;
+      color: #e5e7eb;
+    }
+    h1 {
+      margin-bottom: 0.5rem;
+    }
+    .search-bar {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    input {
+      padding: 0.5rem 0.75rem;
+      border-radius: 0.375rem;
+      border: 1px solid #64748b;
+      background: #020617;
+      color: #e5e7eb;
+      flex: 1 1 200px;
+    }
+    button {
+      padding: 0.5rem 1rem;
+      border-radius: 0.375rem;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      background: #22c55e;
+      color: #022c22;
+    }
+    button:hover {
+      filter: brightness(1.1);
+    }
+    #status {
+      min-height: 1.25rem;
+      font-size: 0.9rem;
+      color: #fbbf24;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 2fr);
+      gap: 1.25rem;
+      margin-top: 1rem;
+    }
+    @media (max-width: 800px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+    #profile, #repos {
+      background: #020617;
+      border-radius: 0.75rem;
+      padding: 1rem;
+      border: 1px solid #1e293b;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    }
+    #profile header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+    }
+    #profile img {
+      width: 80px;
+      height: 80px;
+      border-radius: 999px;
+      border: 2px solid #10b981;
+    }
+    .stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+      font-size: 0.8rem;
+    }
+    .badge {
+      padding: 0.2rem 0.5rem;
+      border-radius: 999px;
+      border: 1px solid #334155;
+      background: #020617;
+    }
+    .repo {
+      padding: 0.5rem 0.75rem;
+      border-radius: 0.5rem;
+      border: 1px solid #1f2933;
+      margin-bottom: 0.5rem;
+      background: #020617;
+    }
+    .repo-name {
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+    .repo-meta {
+      font-size: 0.75rem;
+      color: #9ca3af;
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+    a {
+      color: #60a5fa;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <h1>GitHub Profile Explorer</h1>
+  <p>Type a GitHub username to see profile info and recent repositories.</p>
+
+  <div class="search-bar">
+    <input id="username" placeholder="e.g. gaearon, torvalds, your-username" />
+    <button id="search">Search</button>
+  </div>
+
+  <p id="status"></p>
+
+  <div class="layout">
+    <section id="profile"></section>
+    <section id="repos"></section>
+  </div>
+
+  <script>
+    const input = document.getElementById('username');
+    const searchBtn = document.getElementById('search');
+    const statusEl = document.getElementById('status');
+    const profileEl = document.getElementById('profile');
+    const reposEl = document.getElementById('repos');
+
+    async function loadUser() {
+      const username = input.value.trim();
+      if (!username) {
+        statusEl.textContent = 'Please enter a username.';
+        return;
+      }
+
+      statusEl.textContent = 'Loading…';
+      profileEl.innerHTML = '';
+      reposEl.innerHTML = '';
+
+      try {
+        const [userRes, repoRes] = await Promise.all([
+          fetch(`https://api.github.com/users/${username}`),
+          fetch(`https://api.github.com/users/${username}/repos?sort=updated&per_page=10`)
+        ]);
+
+        if (!userRes.ok) {
+          throw new Error('User not found.');
+        }
+
+        const user = await userRes.json();
+        const repos = repoRes.ok ? await repoRes.json() : [];
+
+        renderProfile(user);
+        renderRepos(repos);
+        statusEl.textContent = '';
+      } catch (err) {
+        statusEl.textContent = err.message || 'Something went wrong.';
+      }
+    }
+
+    function renderProfile(user) {
+      profileEl.innerHTML = `
+        <header>
+          <img src="${user.avatar_url}" alt="${user.login} avatar">
+          <div>
+            <div style="font-weight:700;font-size:1.1rem;">
+              ${user.name || user.login}
+            </div>
+            <div style="font-size:0.85rem;color:#9ca3af;">@${user.login}</div>
+            ${user.bio ? `<p style="margin-top:0.5rem;font-size:0.9rem;">${user.bio}</p>` : ''}
+          </div>
+        </header>
+        <div class="stats">
+          <span class="badge">Followers: ${user.followers}</span>
+          <span class="badge">Following: ${user.following}</span>
+          <span class="badge">Public Repos: ${user.public_repos}</span>
+          ${user.location ? `<span class="badge">📍 ${user.location}</span>` : ''}
+          ${user.blog ? `<span class="badge"><a href="${user.blog}" target="_blank">Website</a></span>` : ''}
+        </div>
+      `;
+    }
+
+    function renderRepos(repos) {
+      if (!repos.length) {
+        reposEl.textContent = 'No public repositories found.';
+        return;
+      }
+
+      reposEl.innerHTML = '<h2 style="margin-top:0;">Recent Repositories</h2>';
+      repos.forEach(repo => {
+        const div = document.createElement('div');
+        div.className = 'repo';
+        div.innerHTML = `
+          <div class="repo-name">
+            <a href="${repo.html_url}" target="_blank">${repo.name}</a>
+          </div>
+          <div style="font-size:0.85rem;margin-bottom:0.25rem;">
+            ${repo.description || '<em>No description provided.</em>'}
+          </div>
+          <div class="repo-meta">
+            <span>★ ${repo.stargazers_count}</span>
+            <span>Forks: ${repo.forks_count}</span>
+            ${repo.language ? `<span>${repo.language}</span>` : ''}
+            <span>Updated: ${new Date(repo.updated_at).toLocaleDateString()}</span>
+          </div>
+        `;
+        reposEl.appendChild(div);
+      });
+    }
+
+    searchBtn.addEventListener('click', loadUser);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') loadUser();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>JS Kanban Board</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 1.5rem;
+      font-family: system-ui, sans-serif;
+      background: #020617;
+      color: #e5e7eb;
+    }
+    h1 {
+      margin-bottom: 0.25rem;
+    }
+    .subtitle {
+      font-size: 0.9rem;
+      color: #94a3b8;
+      margin-bottom: 1rem;
+    }
+    .new-task {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    .new-task input {
+      flex: 1 1 200px;
+      padding: 0.5rem 0.75rem;
+      border-radius: 0.4rem;
+      border: 1px solid #475569;
+      background: #020617;
+      color: #e5e7eb;
+    }
+    .new-task button {
+      padding: 0.5rem 1rem;
+      border-radius: 0.4rem;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      background: #3b82f6;
+      color: #eff6ff;
+    }
+    .new-task button:hover {
+      filter: brightness(1.1);
+    }
+    .board {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1rem;
+      margin-top: 0.5rem;
+    }
+    @media (max-width: 900px) {
+      .board {
+        grid-template-columns: 1fr;
+      }
+    }
+    .column {
+      background: #020617;
+      border-radius: 0.75rem;
+      border: 1px solid #1f2933;
+      padding: 0.75rem;
+      min-height: 220px;
+      display: flex;
+      flex-direction: column;
+    }
+    .column-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: #9ca3af;
+    }
+    .column-header span:first-child {
+      font-weight: 600;
+      color: #e5e7eb;
+      letter-spacing: 0.12em;
+    }
+    .column-body {
+      flex: 1;
+      border-radius: 0.5rem;
+      padding: 0.25rem;
+      transition: background 0.15s ease-out, border-color 0.15s;
+    }
+    .column-body.drag-over {
+      background: rgba(59,130,246,0.15);
+      border: 1px dashed #3b82f6;
+    }
+    .task {
+      background: #020617;
+      border-radius: 0.5rem;
+      border: 1px solid #1f2933;
+      padding: 0.5rem 0.6rem;
+      margin-bottom: 0.4rem;
+      cursor: grab;
+      font-size: 0.9rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .task:hover {
+      border-color: #3b82f6;
+    }
+    .task.dragging {
+      opacity: 0.6;
+    }
+    .task-title {
+      flex: 1;
+      margin-right: 0.5rem;
+    }
+    .task-delete {
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      color: #f97373;
+      font-size: 1rem;
+      padding: 0;
+      line-height: 1;
+    }
+  </style>
+</head>
+<body>
+  <h1>Kanban Board</h1>
+  <p class="subtitle">Drag tasks between columns. Everything is saved in localStorage.</p>
+
+  <div class="new-task">
+    <input id="newTaskInput" placeholder="Add a new task…" />
+    <button id="addTaskBtn">Add</button>
+  </div>
+
+  <div class="board">
+    <div class="column" data-status="todo">
+      <div class="column-header">
+        <span>To Do</span>
+        <span id="count-todo">0</span>
+      </div>
+      <div class="column-body" data-dropzone="todo"></div>
+    </div>
+
+    <div class="column" data-status="doing">
+      <div class="column-header">
+        <span>In Progress</span>
+        <span id="count-doing">0</span>
+      </div>
+      <div class="column-body" data-dropzone="doing"></div>
+    </div>
+
+    <div class="column" data-status="done">
+      <div class="column-header">
+        <span>Done</span>
+        <span id="count-done">0</span>
+      </div>
+      <div class="column-body" data-dropzone="done"></div>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'js-kanban-tasks-v1';
+
+    let tasks = loadTasks();
+
+    const input = document.getElementById('newTaskInput');
+    const addBtn = document.getElementById('addTaskBtn');
+    const dropzones = document.querySelectorAll('.column-body');
+
+    function loadTasks() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function saveTasks() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+    }
+
+    function createTask(title, status = 'todo') {
+      return {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        title,
+        status
+      };
+    }
+
+    function addTaskFromInput() {
+      const title = input.value.trim();
+      if (!title) return;
+      tasks.push(createTask(title, 'todo'));
+      input.value = '';
+      saveTasks();
+      render();
+    }
+
+    function deleteTask(id) {
+      tasks = tasks.filter(t => t.id !== id);
+      saveTasks();
+      render();
+    }
+
+    function updateTaskStatus(id, status) {
+      const task = tasks.find(t => t.id === id);
+      if (!task) return;
+      task.status = status;
+      saveTasks();
+      render();
+    }
+
+    function render() {
+      const zoneMap = { todo: [], doing: [], done: [] };
+      tasks.forEach(t => zoneMap[t.status]?.push(t));
+
+      dropzones.forEach(zone => {
+        const status = zone.dataset.dropzone;
+        zone.innerHTML = '';
+        zoneMap[status].forEach(task => {
+          const el = document.createElement('div');
+          el.className = 'task';
+          el.draggable = true;
+          el.dataset.taskId = task.id;
+          el.innerHTML = `
+            <span class="task-title">${task.title}</span>
+            <button class="task-delete" title="Delete task">×</button>
+          `;
+          addTaskEventListeners(el);
+          zone.appendChild(el);
+        });
+      });
+
+      document.getElementById('count-todo').textContent = zoneMap.todo.length;
+      document.getElementById('count-doing').textContent = zoneMap.doing.length;
+      document.getElementById('count-done').textContent = zoneMap.done.length;
+    }
+
+    function addTaskEventListeners(taskEl) {
+      const id = taskEl.dataset.taskId;
+
+      taskEl.addEventListener('dragstart', e => {
+        taskEl.classList.add('dragging');
+        e.dataTransfer.setData('text/plain', id);
+      });
+
+      taskEl.addEventListener('dragend', () => {
+        taskEl.classList.remove('dragging');
+      });
+
+      const deleteBtn = taskEl.querySelector('.task-delete');
+      deleteBtn.addEventListener('click', () => deleteTask(id));
+    }
+
+    dropzones.forEach(zone => {
+      zone.addEventListener('dragover', e => {
+        e.preventDefault();
+        zone.classList.add('drag-over');
+      });
+      zone.addEventListener('dragleave', () => {
+        zone.classList.remove('drag-over');
+      });
+      zone.addEventListener('drop', e => {
+        e.preventDefault();
+        zone.classList.remove('drag-over');
+        const id = e.dataTransfer.getData('text/plain');
+        const status = zone.dataset.dropzone;
+        updateTaskStatus(id, status);
+      });
+    });
+
+    addBtn.addEventListener('click', addTaskFromInput);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') addTaskFromInput();
+    });
+
+    render();
+  </script>
+</body>
